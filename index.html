@@ -125,9 +125,13 @@
   しゅじんこうは <b>ロケット</b> をつくって たすけにいくことにした！<br><br>
   3Dの せかいを <b>あるいて</b>、木・石・鉄を ほって あつめよう。<br>
   まんなかの ＋ を ブロックに あわせて「ほる」だ！</p>
-  <button class="btn" onclick="startGame(false)">▶ はじめる</button>
-  <button class="btn" id="contBtn" onclick="startGame(true)" style="display:none;background:#6cc0ff;box-shadow:0 4px 0 #2a7fc0;">⏩ つづきから</button>
-  <button class="btn" onclick="openTransfer()" style="font-size:15px;padding:10px 18px;background:#2d3870;color:#fff;box-shadow:0 4px 0 #1a2150;">📋 ひきつぎコード</button>
+  <button class="btn" onclick="startGame(false,'normal')">▶ はじめる（ふつう）</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
+    <button class="btn" onclick="startGame(false,'apoc')" style="font-size:15px;padding:10px 16px;background:#6a6258;color:#fff;box-shadow:0 4px 0 #3d382f;">☠️ せいきまつ</button>
+    <button class="btn" onclick="startGame(false,'gold')" style="font-size:15px;padding:10px 16px;background:#e8b800;color:#3a2c00;box-shadow:0 4px 0 #a98500;">✨ 金の世界</button>
+  </div>
+  <button class="btn" id="contBtn" onclick="startGame(true)" style="display:none;font-size:15px;padding:10px 18px;background:#6cc0ff;box-shadow:0 4px 0 #2a7fc0;">⏩ つづきから</button>
+  <button class="btn" onclick="openTransfer()" style="font-size:14px;padding:9px 16px;background:#2d3870;color:#fff;box-shadow:0 4px 0 #1a2150;">📋 ひきつぎコード</button>
   <div class="hint">PC：WASDで うごく・ドラッグで みまわす・スペースで ジャンプ・Eか クリックで ほる<br>
   スマホ：左の十字で うごく・画面ドラッグで みまわす・右の⤴ジャンプ／⛏️ほる</div>
 </div>
@@ -216,6 +220,7 @@
   <button class="act" onclick="sellStone()"><span>🪙 石をうる</span><span class="cost">石5 → 1コイン</span></button>
   <button class="act" onclick="sellWood()"><span>🪙 木をうる</span><span class="cost">木5 → 1コイン</span></button>
   <button class="act" id="buy_pick" onclick="buyPick()"><span>⛏️ つるはしをかう</span><span class="cost">3コイン</span></button>
+  <button class="act" id="buy_iron" onclick="buyIron()"><span>⚙️ 鉄をかう</span><span class="cost">3コイン → 鉄10</span></button>
   <button class="closeb" onclick="closeAll()">とじる</button>
 </div></div>
 
@@ -247,6 +252,7 @@ if(typeof THREE==='undefined'){ document.getElementById('loaderr').style.display
 const S={wood:0,stone:0,iron:0,coin:0,hasPick:false,body:0,fuel:0};
 const BODY_MAX=100,FUEL_MAX=50,USE=10;
 let startTime=0, running=false, launching=false;
+let gameMode='normal'; // 'normal' | 'apoc'(せいきまつ) | 'gold'(金の世界)
 const $=id=>document.getElementById(id);
 
 // ====== ワールドデータ ======
@@ -266,7 +272,8 @@ function genWorld(){
   // 平原（まんなかの ひろい くさはら。木がまばら）
   const px0=Math.floor(COLS*0.18), px1=COLS-9, py0=8, py1=ROWS-6;
   for(let y=py0;y<py1;y++)for(let x=px0;x<px1;x++){ map[y][x]= Math.random()<0.05?1:0; }
-  for(let y=pondRect.y0;y<pondRect.y1;y++)for(let x=pondRect.x0;x<pondRect.x1;x++) map[y][x]=4; // 湖
+  const WT = (gameMode==='apoc') ? 0 : 4; // せいきまつは 水がない（干上がる）
+  for(let y=pondRect.y0;y<pondRect.y1;y++)for(let x=pondRect.x0;x<pondRect.x1;x++) map[y][x]=WT; // 湖
   map[3][COLS-5]=5;                                          // ショップ
   // 村：ひろば＋小さな家（家を見て「ほる」と 室内に切りかわる）
   const vx0=COLS-15, vy0=2;
@@ -284,7 +291,7 @@ function genWorld(){
   // 砂漠（すなの地面・サボテン）
   for(let y=desertRect.y0;y<desertRect.y1;y++)for(let x=desertRect.x0;x<desertRect.x1;x++){ if(map[y][x]!==5&&map[y][x]!==6&&map[y][x]!==8) map[y][x]= (Math.random()<0.05?13:12); }
   // 海（うみ）：ひだりがわの 大きな水
-  for(let y=seaRect.y0;y<seaRect.y1;y++)for(let x=seaRect.x0;x<seaRect.x1;x++){ const t=map[y][x]; if(t!==5&&t!==6&&t!==8&&t!==9) map[y][x]=4; }
+  for(let y=seaRect.y0;y<seaRect.y1;y++)for(let x=seaRect.x0;x<seaRect.x1;x++){ const t=map[y][x]; if(t!==5&&t!==6&&t!==8&&t!==9) map[y][x]=WT; }
   for(let y=ROWS-9;y<ROWS-6;y++)for(let x=COLS/2-2;x<COLS/2+2;x++) map[y][Math.floor(x)]=0; // スタート地点
 }
 function tileAt(x,z){ const tx=Math.floor(x), tz=Math.floor(z); if(tx<0||tz<0||tx>=COLS||tz>=ROWS)return 7; return map[tz][tx]; }
@@ -297,6 +304,7 @@ let rocketFlame=null, rocketBeacons=[], smokePuffs=[];
 let dayTime=0; const MORN=300, NOON=600, NIGHT=300, CYCLE=MORN+NOON+NIGHT; // あさ5分/ひる10分/よる5分
 let inside=false, interiorScene=null, exitDoor=null, ret={x:0,z:0,yaw:0,pitch:0};
 let pyramidScene=null, pyramidExit=null, pyramidMesh=null, activeInterior=null, activeExit=null, interiorSize=6;
+let boatScene=null, boatExit=null;
 let autosaveIv=null;
 let raining=false;
 function makeRain(){
@@ -365,9 +373,12 @@ function updateSky(dt){
     lightK=1-0.75*k; phase='よる';
   }
   if(raining) sky.lerp(C_GRAY,0.6);
+  lightK = 0.12 + lightK*0.88; // 夜をもっと暗く
+  if(gameMode==='gold'){ sky.setHex(0xf5d742); lightK=Math.max(lightK,0.9); }       // 金の世界＝黄色い空
+  else if(gameMode==='apoc'){ sky.multiplyScalar(0.5); lightK*=0.55; }              // せいきまつ＝うすぐらい
   scene.background.copy(sky); scene.fog.color.copy(sky);
-  if(hemiLight) hemiLight.intensity=0.35+0.65*lightK;
-  if(dirLight) dirLight.intensity=0.15+0.5*lightK;
+  if(hemiLight) hemiLight.intensity=0.18+0.72*lightK;
+  if(dirLight) dirLight.intensity=0.1+0.5*lightK;
   if(sun){ sun.position.set(P.x+10, 6+lightK*28, P.z-30); sun.visible=lightK>0.45 && !raining; }
   if(moon){ moon.position.set(P.x-12, 6+(1-lightK)*28, P.z-30); moon.visible=lightK<0.55; }
   if(stars){ stars.position.set(P.x,0,P.z); stars.visible=(phase==='よる'); }
@@ -649,6 +660,39 @@ function updateHunters(){
 }
 function talkHunter(){ const el=$('speech'); el.textContent='🏹 '+HUNTER_LINES[Math.floor(Math.random()*HUNTER_LINES.length)]; el.style.display='block';
   clearTimeout(talkT); talkT=setTimeout(()=>{ el.style.display='none'; },3500); beep(); }
+// ====== ガイコツ（せいきまつモード：あるく＆プレイヤーを追う）======
+let skeletons=[];
+function makeSkeleton(){
+  const g=new THREE.Group(), b=new THREE.MeshLambertMaterial({color:0xeae8e0}), d=new THREE.MeshBasicMaterial({color:0x111111});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.45,0.18),b); body.position.y=0.55; g.add(body);
+  for(let i=0;i<3;i++){ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.03,0.2),d); rib.position.set(0,0.42+i*0.12,0.0); g.add(rib); }
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.26,0.24),b); head.position.y=0.92; g.add(head);
+  [-0.06,0.06].forEach(dx=>{ const e=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.07,0.04),d); e.position.set(dx,0.93,0.13); g.add(e); });
+  [-0.09,0.09].forEach(dx=>{ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.45,0.07),b); leg.position.set(dx,0.22,0); g.add(leg); });
+  [-0.2,0.2].forEach(dx=>{ const arm=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.4,0.07),b); arm.position.set(dx,0.55,0); g.add(arm); });
+  return g;
+}
+function buildSkeletons(){
+  skeletons=[]; let placed=0,tries=0;
+  while(placed<7 && tries<900){ tries++; const x=2+Math.floor(Math.random()*(COLS-4)), y=2+Math.floor(Math.random()*(ROWS-4));
+    if(map[y]&&map[y][x]===0){ const mesh=makeSkeleton(); mesh.position.set(x+0.5,0,y+0.5); scene.add(mesh);
+      skeletons.push({x:x+0.5,z:y+0.5,mvx:0,mvz:0,t:0,mesh}); placed++; } }
+}
+function updateSkeletons(){
+  for(const s of skeletons){
+    const dx=P.x-s.x, dz=P.z-s.z, dd=Math.hypot(dx,dz);
+    if(dd<14 && dd>0.9){ const sp=0.02; s.mvx=dx/dd*sp; s.mvz=dz/dd*sp; s.mesh.rotation.y=Math.atan2(s.mvx,s.mvz); } // プレイヤーを追う
+    else { s.t--; if(s.t<=0){ s.t=80+Math.floor(Math.random()*120); const p=[[1,0],[-1,0],[0,1],[0,-1],[0,0]][Math.floor(Math.random()*5)]; s.mvx=p[0]*0.014; s.mvz=p[1]*0.014; if(s.mvx||s.mvz)s.mesh.rotation.y=Math.atan2(s.mvx,s.mvz); } }
+    if(s.mvx||s.mvz){ if(!solidAt(s.x+s.mvx,s.z))s.x+=s.mvx; else s.mvx=0; if(!solidAt(s.x,s.z+s.mvz))s.z+=s.mvz; else s.mvz=0; s.mesh.position.set(s.x, Math.abs(Math.sin(performance.now()/130))*0.05, s.z); }
+  }
+}
+// ====== 金の世界モード：ぜんぶ金色に ======
+function applyGold(){
+  const g1=new THREE.Color(0xffcf2e), g2=new THREE.Color(0xe0a800);
+  scene.traverse(o=>{ if(o.isMesh && o.material && o.material.color && o!==sun && o!==moon && o!==stars){
+    o.material.color.copy((o.position.y>0.9||Math.random()<0.5)?g1:g2);
+  }});
+}
 // ====== 村人 ======
 let villagers=[];
 function makeVillager(c){
@@ -663,6 +707,7 @@ function makeVillager(c){
 }
 function buildVillagers(){
   villagers=[]; const z=villageZone; if(!z) return;
+  if(gameMode==='apoc') return; // せいきまつは ひとが いない
   const cols=[0xd95b5b,0x5b8ad9,0x5bbf6e,0xe0a23c,0x9a6ad9,0xd97ab0];
   let placed=0,tries=0;
   while(placed<6 && tries<500){ tries++;
@@ -709,9 +754,11 @@ function talk(v){
 }
 let boat=null;
 function buildWater(){
+  const dry = (gameMode==='apoc');
   [pondRect, seaRect].forEach(r=>{ const w=r.x1-r.x0, d=r.y1-r.y0;
-    const p=new THREE.Mesh(new THREE.PlaneGeometry(w,d), new THREE.MeshLambertMaterial({color:0x2a78c0, transparent:true, opacity:0.85}));
-    p.rotation.x=-Math.PI/2; p.position.set((r.x0+r.x1)/2,0.13,(r.y0+r.y1)/2); scene.add(p); });
+    const mat = dry ? new THREE.MeshLambertMaterial({color:0x8a8270}) : new THREE.MeshLambertMaterial({color:0x2a78c0, transparent:true, opacity:0.85}); // 干上がった海＝かわいた地面
+    const p=new THREE.Mesh(new THREE.PlaneGeometry(w,d), mat);
+    p.rotation.x=-Math.PI/2; p.position.set((r.x0+r.x1)/2, dry?0.02:0.13, (r.y0+r.y1)/2); scene.add(p); });
 }
 function buildBoat(){
   const wt=[]; let sx=0,sz=0; for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(map[y][x]===4){ wt.push([x,y]); sx+=x+0.5; sz+=y+0.5; }
@@ -725,9 +772,30 @@ function buildBoat(){
   const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,1.1,8), new THREE.MeshLambertMaterial({color:0x6b4423})); mast.position.y=0.9; boat.add(mast);
   const sail=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.7,0.55), new THREE.MeshLambertMaterial({color:0xfafafa})); sail.position.set(0.04,0.95,0); boat.add(sail);
   const flag=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.14,0.2), new THREE.MeshLambertMaterial({color:0xff5a5a})); flag.position.set(0,1.42,0.12); boat.add(flag);
-  boat.position.set(cx,0.15,cz); boat.userData={baseY:0.15};
+  boat.position.set(cx,0.15,cz); boat.userData={baseY:0.15, kind:'boat'};
   scene.add(boat);
 }
+const BSIZE=6;
+function buildBoatInterior(){
+  boatScene=new THREE.Scene();
+  boatScene.background=new THREE.Color(0x24323e);
+  boatScene.add(new THREE.HemisphereLight(0xcfe0ff,0x20303a,0.85));
+  const pl=new THREE.PointLight(0xffe0a0,0.8,16); pl.position.set(BSIZE/2,2.4,BSIZE/2); boatScene.add(pl);
+  const add=m=>boatScene.add(m);
+  const wood=new THREE.MeshLambertMaterial({color:0x8a5a2a}), wood2=new THREE.MeshLambertMaterial({color:0x6b4423});
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(BSIZE,BSIZE),wood); floor.rotation.x=-Math.PI/2; floor.position.set(BSIZE/2,0,BSIZE/2); add(floor);
+  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(BSIZE,BSIZE),wood2); ceil.rotation.x=Math.PI/2; ceil.position.set(BSIZE/2,2.6,BSIZE/2); add(ceil);
+  function w(ww,dd,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(ww,2.6,dd),wood2); m.position.set(x,1.3,z); add(m); }
+  w(BSIZE,0.2,BSIZE/2,0); w(BSIZE,0.2,BSIZE/2,BSIZE); w(0.2,BSIZE,0,BSIZE/2); w(0.2,BSIZE,BSIZE,BSIZE/2);
+  for(let i=0;i<3;i++){ const b=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.6,12),wood); b.position.set(1+i*0.7,0.3,1); add(b); } // たる
+  const crate=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.6),wood); crate.position.set(BSIZE-1,0.3,1.2); add(crate); // 木箱
+  const wheel=new THREE.Mesh(new THREE.TorusGeometry(0.4,0.05,8,16),wood2); wheel.position.set(BSIZE/2,1.1,0.55); add(wheel); // だ（ハンドル）
+  for(let i=0;i<6;i++){ const a=i*Math.PI/3; const sp=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.78,0.04),wood2); sp.position.set(BSIZE/2,1.1,0.55); sp.rotation.z=a; add(sp); }
+  const win=new THREE.Mesh(new THREE.CircleGeometry(0.42,18), new THREE.MeshBasicMaterial({color:0x3aa0e0})); win.position.set(BSIZE/2,1.55,0.11); add(win); // まど（海）
+  const lant=new THREE.Mesh(new THREE.SphereGeometry(0.15,10,10), new THREE.MeshBasicMaterial({color:0xffe39a})); lant.position.set(1,2.0,BSIZE-1); add(lant); // ランタン
+  boatExit=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.9,0.16), wood); boatExit.position.set(BSIZE/2,0.95,BSIZE-0.1); boatExit.userData={kind:'exit'}; add(boatExit); // 出口
+}
+function enterBoat(){ if(!boatScene) buildBoatInterior(); enterInterior(boatScene, boatExit, BSIZE); }
 function buildFlowers(){
   const EMO=['🌸','🌼','🌻','🌷','🌺'];
   let placed=0, tries=0;
@@ -770,6 +838,12 @@ function buildDesert(){
 const BODYCOL=[0xe8d8b0,0xd9c69a,0xcdb892,0xe6cdb0,0xded0c0];
 const ROOFCOL=[0xb5432f,0x7a5230,0x3f6fa0,0x4a7a3a,0xb07a2a];
 let houseObjs=[];
+function makeCobweb(){
+  const g=new THREE.Group(), w=new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.45});
+  for(let i=0;i<4;i++){ const l=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.012,0.012),w); l.rotation.y=i*Math.PI/4; g.add(l); } // 放射の糸
+  [0.12,0.22].forEach(r=>{ const ring=new THREE.Mesh(new THREE.TorusGeometry(r,0.006,4,12),w); ring.rotation.x=Math.PI/2; g.add(ring); }); // 同心円
+  return g;
+}
 function buildHouse(){
   houseObjs=[];
   houseTiles.forEach(([x,y],i)=>{
@@ -779,6 +853,10 @@ function buildHouse(){
     const door=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.05), new THREE.MeshLambertMaterial({color:0x6b4423})); door.position.set(0,0.17,0.36);
     const win=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.18,0.05), new THREE.MeshLambertMaterial({color:0x9fd0ff})); win.position.set(0.18,0.45,0.36);
     g.add(body,roof,door,win); g.position.set(x+0.5,0,y+0.5);
+    if(gameMode==='apoc'){ // クモの巣だらけ
+      const cw1=makeCobweb(); cw1.position.set(0.22,0.62,0.36); cw1.rotation.x=Math.PI/2; g.add(cw1);
+      const cw2=makeCobweb(); cw2.scale.setScalar(0.7); cw2.position.set(-0.24,0.28,0.36); cw2.rotation.x=Math.PI/2; g.add(cw2);
+    }
     g.userData={kind:'house', hx:x, hy:y};
     scene.add(g); houseObjs.push(g);
   });
@@ -1008,7 +1086,7 @@ addEventListener('pointercancel',e=>{ if(e.pointerId===dragId){ dragging=false; 
 
 function updateTarget(){
   raycaster.setFromCamera({x:0,y:0}, camera); raycaster.far=REACH;
-  const arr = inside ? [activeExit] : blockObjs.concat(animals.map(a=>a.mesh), villagers.filter(v=>v.mesh.visible).map(v=>v.mesh), camels.map(c=>c.mesh), campfires, ball?[ball.mesh]:[], hunters.map(h=>h.mesh), shopkeeper?[shopkeeper]:[], pyramidMesh?[pyramidMesh]:[], [rocketGroup], houseObjs);
+  const arr = inside ? [activeExit] : blockObjs.concat(animals.map(a=>a.mesh), villagers.filter(v=>v.mesh.visible).map(v=>v.mesh), camels.map(c=>c.mesh), campfires, ball?[ball.mesh]:[], hunters.map(h=>h.mesh), boat?[boat]:[], shopkeeper?[shopkeeper]:[], pyramidMesh?[pyramidMesh]:[], [rocketGroup], houseObjs);
   const hits=raycaster.intersectObjects(arr, true);
   let t=null;
   if(hits.length){ let o=hits[0].object; while(o && !(o.userData&&o.userData.kind)) o=o.parent; if(o) t=o.userData; }
@@ -1025,6 +1103,7 @@ function updateTarget(){
   else if(t.kind==='shop'||t.kind==='shopkeeper'){ pr.textContent='🛒 お店の人！［ほる/E］で かいもの'; pr.style.display='block'; }
   else if(t.kind==='house'){ pr.textContent='🏠 ［ほる/E］で 家に入る'; pr.style.display='block'; }
   else if(t.kind==='pyramid'){ pr.textContent='🔺 ［ほる/E］で ピラミッドに入る'; pr.style.display='block'; }
+  else if(t.kind==='boat'){ pr.textContent='⛵ ［ほる/E］で 船に入る'; pr.style.display='block'; }
   else if(t.kind==='villager'){ pr.textContent='💬 ［ほる/E］で はなす'; pr.style.display='block'; }
   else if(t.kind==='camel'){ pr.textContent='🐫 ［ほる/E］で ラクダにのる'; pr.style.display='block'; }
   else if(t.kind==='campfire'){ pr.textContent='🔥 ［ほる/E］で 火をつける'; pr.style.display='block'; }
@@ -1045,6 +1124,7 @@ function mainAction(){
   if(t.kind==='exit'){ exitHouse(); return; }
   if(t.kind==='house'){ enterHouse(); return; }
   if(t.kind==='pyramid'){ enterPyramid(); return; }
+  if(t.kind==='boat'){ enterBoat(); return; }
   if(t.kind==='villager'){ talk(t.ref); return; }
   if(t.kind==='shop'||t.kind==='shopkeeper'){ openShop(); return; }
   if(t.kind==='rocket'){ openRocket(); return; }
@@ -1077,6 +1157,7 @@ function craftHouse(){ if(S.stone<25)return; S.stone-=25; S.coin+=2; popCenter('
 function sellStone(){ if(S.stone<5)return; S.stone-=5; S.coin+=1; popCenter('🪙+1','#ffd34d'); render(); }
 function sellWood(){ if(S.wood<5)return; S.wood-=5; S.coin+=1; popCenter('🪙+1','#ffd34d'); render(); }
 function buyPick(){ if(S.coin<3||S.hasPick)return; S.coin-=3; S.hasPick=true; popCenter('⛏️かった！','#5ee07a'); render(); }
+function buyIron(){ if(S.coin<3)return; S.coin-=3; S.iron+=10; popCenter('⚙️鉄+10','#ffd34d'); render(); }
 function buildBody(){ if(S.iron<USE||S.body>=BODY_MAX)return; S.iron-=USE; S.body=Math.min(BODY_MAX,S.body+USE); popCenter('🛠️+'+USE,'#3bd6ff'); render(); }
 function buildFuel(){ if(S.iron<USE||S.fuel>=FUEL_MAX)return; S.iron-=USE; S.fuel=Math.min(FUEL_MAX,S.fuel+USE); popCenter('⛽+'+USE,'#ff9b4d'); render(); }
 function launch(){
@@ -1139,6 +1220,7 @@ function render(){
   $('c_pick').disabled=(S.wood<3||S.stone<2||S.hasPick);
   $('c_torch').disabled=(S.wood<1); $('c_house').disabled=(S.stone<25);
   $('buy_pick').disabled=(S.coin<3||S.hasPick);
+  { const bi=$('buy_iron'); if(bi) bi.disabled=(S.coin<3); }
   $('btn_body').disabled=(S.iron<USE||S.body>=BODY_MAX);
   $('btn_fuel').disabled=(S.iron<USE||S.fuel>=FUEL_MAX);
   $('btn_launch').disabled=!(S.body>=BODY_MAX&&S.fuel>=FUEL_MAX);
@@ -1193,7 +1275,7 @@ function animate(){
     if(inside && interiorMaze) checkPyramidGoal();
     if(!inside){ if(mineCd>0)mineCd--; updateRegrow(); updateAnimals(); updateSky(dt); updateRain(dt); updateSnow(dt); updateSandstorm(dt);
       if(boat){ const tt=performance.now(); boat.position.y=boat.userData.baseY+Math.sin(tt/600)*0.05; boat.rotation.z=Math.sin(tt/800)*0.04; }
-      updateFish(); updateVillagers(); updateCamels(); updateCampfires(); updateBall(); updateHunters();
+      updateFish(); updateVillagers(); updateCamels(); updateCampfires(); updateBall(); updateHunters(); updateSkeletons();
       if(rocketBeacons.length){ const on=Math.floor(performance.now()/500)%2===0; for(const b of rocketBeacons) b.visible=on; }
       if((mmTick++ % 5)===0) drawMinimap(); }
   }
@@ -1269,8 +1351,8 @@ function playAnimalSound(spec){ try{
 
 // ====== セーブ・ロード ======
 function resetState(){ Object.assign(S,{wood:0,stone:0,iron:0,coin:0,hasPick:false,body:0,fuel:0}); dayTime=MORN*0.92; raining=false; } // 明るい朝からスタート
-function saveGame(){ try{ localStorage.setItem('rocket3d', JSON.stringify({S, dayTime, raining})); }catch(e){} }
-function loadGame(){ try{ const d=JSON.parse(localStorage.getItem('rocket3d')); if(d&&d.S){ Object.assign(S,d.S); dayTime=d.dayTime||0; raining=(d.raining!==false); } }catch(e){} }
+function saveGame(){ try{ localStorage.setItem('rocket3d', JSON.stringify({S, dayTime, raining, mode:gameMode})); }catch(e){} }
+function loadGame(){ try{ const d=JSON.parse(localStorage.getItem('rocket3d')); if(d&&d.S){ Object.assign(S,d.S); dayTime=d.dayTime||0; raining=(d.raining!==false); gameMode=d.mode||'normal'; } }catch(e){} }
 function hasSave(){ try{ return !!localStorage.getItem('rocket3d'); }catch(e){ return false; } }
 // ====== ひきつぎコード（PC⇔iPad）======
 function exportCode(){
@@ -1296,13 +1378,16 @@ function loadCode(){ const ok=importCode($('codeIn').value);
   if(ok && $('contBtn')) $('contBtn').style.display=''; }
 
 // ====== スタート ======
-function startGame(cont){
+function startGame(cont, mode){
   if(typeof THREE==='undefined'){ $('loaderr').style.display='flex'; return; }
   if(!renderer){ initThree(); animate(); }
-  genWorld(); buildWorld(); spawnAnimals(34);
+  if(cont) loadGame(); else { resetState(); gameMode=mode||'normal'; }
+  genWorld(); buildWorld();
+  spawnAnimals(gameMode==='apoc'?10:34);
+  if(gameMode==='apoc') buildSkeletons();
+  if(gameMode==='gold') applyGold();
   const MS=Math.max(2,Math.floor(160/COLS));
   const mm=$('minimap'); mm.width=COLS*MS; mm.height=ROWS*MS; mm.style.width=(COLS*MS)+'px'; mm.style.height=(ROWS*MS)+'px';
-  if(cont) loadGame(); else resetState();
   startRainAudio(); applyWeather();
   P.x=COLS/2+0.5; P.z=ROWS-7+0.5; P.y=0; vy=0; riding=null; yaw=Math.PI; pitch=-0.2; lastT=performance.now();
   inside=false; $('exitBtn').style.display='none'; $('clock').style.display=''; $('weatherBtn').style.display=''; $('minimap').style.display='';

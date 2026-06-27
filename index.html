@@ -129,6 +129,7 @@
   <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;">
     <button class="btn" onclick="startGame(false,'apoc')" style="font-size:15px;padding:10px 16px;background:#6a6258;color:#fff;box-shadow:0 4px 0 #3d382f;">☠️ せいきまつ</button>
     <button class="btn" onclick="startGame(false,'gold')" style="font-size:15px;padding:10px 16px;background:#e8b800;color:#3a2c00;box-shadow:0 4px 0 #a98500;">✨ 金の世界</button>
+    <button class="btn" onclick="startGame(false,'future')" style="font-size:15px;padding:10px 16px;background:#4a7ad9;color:#fff;box-shadow:0 4px 0 #2a5aa9;">🏙️ 未来</button>
   </div>
   <button class="btn" id="contBtn" onclick="startGame(true)" style="display:none;font-size:15px;padding:10px 18px;background:#6cc0ff;box-shadow:0 4px 0 #2a7fc0;">⏩ つづきから</button>
   <button class="btn" onclick="openTransfer()" style="font-size:14px;padding:9px 16px;background:#2d3870;color:#fff;box-shadow:0 4px 0 #1a2150;">📋 ひきつぎコード</button>
@@ -221,6 +222,7 @@
   <button class="act" onclick="sellWood()"><span>🪙 木をうる</span><span class="cost">木5 → 1コイン</span></button>
   <button class="act" id="buy_pick" onclick="buyPick()"><span>⛏️ つるはしをかう</span><span class="cost">3コイン</span></button>
   <button class="act" id="buy_iron" onclick="buyIron()"><span>⚙️ 鉄をかう</span><span class="cost">3コイン → 鉄10</span></button>
+  <button class="act" id="buy_pudding" onclick="buyPudding()"><span>🍮 プリンをかう（たべる）</span><span class="cost">2コイン</span></button>
   <button class="closeb" onclick="closeAll()">とじる</button>
 </div></div>
 
@@ -462,6 +464,7 @@ function initThree(){
     wall:new THREE.MeshLambertMaterial({color:0x6b6f80}),
     trunk:new THREE.MeshLambertMaterial({color:0x7a5230}),
     leaf:new THREE.MeshLambertMaterial({color:0x2f8a3a}),
+    dead:new THREE.MeshLambertMaterial({color:0x6b5a3a}),
     water:new THREE.MeshLambertMaterial({color:0x2a78c0, transparent:true, opacity:0.8}),
     shop:new THREE.MeshLambertMaterial({color:0xb5651d}),
   };
@@ -496,6 +499,9 @@ function buildWorld(){
   buildCampfires();
   buildBall();
   buildHunters();
+  buildBirds();
+  buildWreck();
+  if(gameMode==='future'){ buildRoads(); buildBigShip(); buildPlanes(); }
 }
 // ====== お店の人 ======
 let shopkeeper=null;
@@ -709,8 +715,9 @@ function buildVillagers(){
   villagers=[]; const z=villageZone; if(!z) return;
   if(gameMode==='apoc') return; // せいきまつは ひとが いない
   const cols=[0xd95b5b,0x5b8ad9,0x5bbf6e,0xe0a23c,0x9a6ad9,0xd97ab0];
+  const N = (gameMode==='future') ? 16 : 6; // 未来は 人が おおい
   let placed=0,tries=0;
-  while(placed<6 && tries<500){ tries++;
+  while(placed<N && tries<900){ tries++;
     const x=z.x0+1+Math.floor(Math.random()*(z.x1-z.x0-2)), y=z.y0+1+Math.floor(Math.random()*(z.y1-z.y0-2));
     if(map[y]&&map[y][x]===0){ const mesh=makeVillager(cols[placed%cols.length]); mesh.position.set(x+0.5,0,y+0.5); scene.add(mesh);
       const v={x:x+0.5,z:y+0.5,mvx:0,mvz:0,t:Math.floor(Math.random()*100),mesh,state:'wander',target:null};
@@ -796,6 +803,82 @@ function buildBoatInterior(){
   boatExit=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.9,0.16), wood); boatExit.position.set(BSIZE/2,0.95,BSIZE-0.1); boatExit.userData={kind:'exit'}; add(boatExit); // 出口
 }
 function enterBoat(){ if(!boatScene) buildBoatInterior(); enterInterior(boatScene, boatExit, BSIZE); }
+// ====== 空とぶ鳥 ======
+let birds=[];
+function makeBird(){
+  const g=new THREE.Group(), m=new THREE.MeshLambertMaterial({color:0x4a505c});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.1,0.34),m); g.add(body);
+  const wL=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.04,0.18),m); wL.position.set(-0.3,0.02,0); g.add(wL);
+  const wR=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.04,0.18),m); wR.position.set(0.3,0.02,0); g.add(wR);
+  g.userData={wL,wR}; return g;
+}
+function buildBirds(){
+  birds=[];
+  for(let i=0;i<8;i++){ const mesh=makeBird();
+    const b={cx:12+Math.random()*(COLS-24), cz:12+Math.random()*(ROWS-24), r:4+Math.random()*9, a:Math.random()*6.28, sp:0.3+Math.random()*0.45, y:9+Math.random()*6, mesh};
+    mesh.position.set(b.cx,b.y,b.cz); scene.add(mesh); birds.push(b); }
+}
+function updateBirds(dt){
+  const t=performance.now();
+  for(const b of birds){ b.a+=b.sp*dt;
+    b.mesh.position.set(b.cx+Math.cos(b.a)*b.r, b.y+Math.sin(t/600+b.cx)*0.4, b.cz+Math.sin(b.a)*b.r);
+    b.mesh.rotation.y=-b.a+Math.PI/2;
+    const f=Math.sin(t/120+b.cx)*0.55; b.mesh.userData.wL.rotation.z=f; b.mesh.userData.wR.rotation.z=-f;
+  }
+}
+// ====== 沈没船（うみに）======
+function buildWreck(){
+  const cx=(seaRect.x0+seaRect.x1)/2-3, cz=(seaRect.y0+seaRect.y1)/2;
+  const g=new THREE.Group(), wood=new THREE.MeshLambertMaterial({color:0x4a3725});
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.5,2.3),wood); hull.position.y=0.25; g.add(hull);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.18,1.6), new THREE.MeshLambertMaterial({color:0x5a4530})); deck.position.y=0.5; g.add(deck);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,1.5,8),wood); mast.position.set(0,1.0,0.2); mast.rotation.z=0.5; g.add(mast);
+  const sail=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.6,0.55), new THREE.MeshLambertMaterial({color:0x6b6258, transparent:true, opacity:0.7})); sail.position.set(0.25,1.1,0.2); sail.rotation.z=0.5; g.add(sail);
+  g.position.set(cx,-0.18,cz); g.rotation.set(0.22,0.6,0.18); // かたむいて しずむ
+  scene.add(g);
+}
+// ====== 未来モード：ビル・道・大型船・飛行機 ======
+function makeSkyscraper(h,col){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.8,h,0.8), new THREE.MeshLambertMaterial({color:col})); body.position.y=h/2; g.add(body);
+  for(let fy=0.45; fy<h-0.2; fy+=0.5){ const s=new THREE.Mesh(new THREE.BoxGeometry(0.84,0.2,0.84), new THREE.MeshBasicMaterial({color:0x9fd6ff})); s.position.y=fy; g.add(s); } // 窓のライン
+  return g;
+}
+function buildRoads(){
+  const z=villageZone; const rm=new THREE.MeshLambertMaterial({color:0x3a3d44});
+  if(z){ const w=z.x1-z.x0, d=z.y1-z.y0; const p=new THREE.Mesh(new THREE.PlaneGeometry(w,d),rm); p.rotation.x=-Math.PI/2; p.position.set((z.x0+z.x1)/2,0.018,(z.y0+z.y1)/2); scene.add(p); } // 街の地面
+  // 大通り（たてよこ）
+  const hroad=new THREE.Mesh(new THREE.PlaneGeometry(COLS-4,3),rm); hroad.rotation.x=-Math.PI/2; hroad.position.set(COLS/2,0.02,ROWS/2); scene.add(hroad);
+  const vroad=new THREE.Mesh(new THREE.PlaneGeometry(3,ROWS-4),rm); vroad.rotation.x=-Math.PI/2; vroad.position.set(COLS/2,0.02,ROWS/2); scene.add(vroad);
+  // センターライン（黄）
+  for(let x=4;x<COLS-4;x+=2){ const l=new THREE.Mesh(new THREE.PlaneGeometry(0.8,0.12), new THREE.MeshBasicMaterial({color:0xe8c83a})); l.rotation.x=-Math.PI/2; l.position.set(x,0.03,ROWS/2); scene.add(l); }
+}
+function buildBigShip(){
+  const cx=(seaRect.x0+seaRect.x1)/2, cz=(seaRect.y0+seaRect.y1)/2+3;
+  const g=new THREE.Group();
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(2.4,1.0,6.0), new THREE.MeshLambertMaterial({color:0x9a3a3a})); hull.position.y=0.35; g.add(hull);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.3,5.4), new THREE.MeshLambertMaterial({color:0xdddddd})); deck.position.y=0.9; g.add(deck);
+  const tower=new THREE.Mesh(new THREE.BoxGeometry(1.4,1.5,1.6), new THREE.MeshLambertMaterial({color:0xf0f0f0})); tower.position.set(0,1.7,-1.6); g.add(tower);
+  const funnel=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.35,1.0,12), new THREE.MeshLambertMaterial({color:0xd94a4a})); funnel.position.set(0,2.7,-1.6); g.add(funnel);
+  const cc=[0x3a7ad9,0x4a9a4a,0xd9a83a,0x8a4ad9];
+  for(let i=0;i<4;i++){ const c=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.6,1.0), new THREE.MeshLambertMaterial({color:cc[i]})); c.position.set(0,1.35,1.7-i*1.15); g.add(c); }
+  g.position.set(cx,0.1,cz); scene.add(g);
+}
+let planes=[];
+function makePlane(){
+  const g=new THREE.Group(), m=new THREE.MeshLambertMaterial({color:0xf0f0f0});
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.1,1.6,10),m); body.rotation.z=Math.PI/2; g.add(body);
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.05,1.7),m); g.add(wing);
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.05,0.6),m); tail.position.x=-0.7; g.add(tail);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.4,0.05),m); fin.position.set(-0.7,0.22,0); g.add(fin);
+  return g;
+}
+function buildPlanes(){
+  planes=[];
+  for(let i=0;i<3;i++){ const mesh=makePlane(); const p={x:Math.random()*COLS, z:10+Math.random()*(ROWS-20), y:16+Math.random()*8, sp:4+Math.random()*3, mesh};
+    mesh.position.set(p.x,p.y,p.z); scene.add(mesh); planes.push(p); }
+}
+function updatePlanes(dt){ for(const p of planes){ p.x+=p.sp*dt; if(p.x>COLS+6)p.x=-6; p.mesh.position.set(p.x,p.y,p.z); } }
 function buildFlowers(){
   const EMO=['🌸','🌼','🌻','🌷','🌺'];
   let placed=0, tries=0;
@@ -847,15 +930,25 @@ function makeCobweb(){
 function buildHouse(){
   houseObjs=[];
   houseTiles.forEach(([x,y],i)=>{
+    if(gameMode==='future'){ // 未来＝ビル
+      const cols=[0x6a7a8e,0x556070,0x7a8a9e,0x4a5a6e,0x8a9aae];
+      const sk=makeSkyscraper(2.6+Math.random()*3.0, cols[i%cols.length]);
+      sk.position.set(x+0.5,0,y+0.5); sk.userData={kind:'building'}; scene.add(sk); houseObjs.push(sk); return;
+    }
     const g=new THREE.Group();
-    const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.7,0.7), new THREE.MeshLambertMaterial({color:BODYCOL[i%BODYCOL.length]})); body.position.y=0.35;
-    const roof=new THREE.Mesh(new THREE.ConeGeometry(0.62,0.5,4), new THREE.MeshLambertMaterial({color:ROOFCOL[i%ROOFCOL.length]})); roof.position.y=0.95; roof.rotation.y=Math.PI/4;
+    const apoc=(gameMode==='apoc');
+    const bodyCol = apoc ? 0x6b6258 : BODYCOL[i%BODYCOL.length];
+    const roofCol = apoc ? 0x4a3c30 : ROOFCOL[i%ROOFCOL.length];
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.7,0.7), new THREE.MeshLambertMaterial({color:bodyCol})); body.position.y=0.35;
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(0.62,0.5,4), new THREE.MeshLambertMaterial({color:roofCol})); roof.position.y=0.95; roof.rotation.y=Math.PI/4;
     const door=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.05), new THREE.MeshLambertMaterial({color:0x6b4423})); door.position.set(0,0.17,0.36);
-    const win=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.18,0.05), new THREE.MeshLambertMaterial({color:0x9fd0ff})); win.position.set(0.18,0.45,0.36);
+    const win=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.18,0.05), new THREE.MeshLambertMaterial({color:apoc?0x222222:0x9fd0ff})); win.position.set(0.18,0.45,0.36);
     g.add(body,roof,door,win); g.position.set(x+0.5,0,y+0.5);
-    if(gameMode==='apoc'){ // クモの巣だらけ
-      const cw1=makeCobweb(); cw1.position.set(0.22,0.62,0.36); cw1.rotation.x=Math.PI/2; g.add(cw1);
-      const cw2=makeCobweb(); cw2.scale.setScalar(0.7); cw2.position.set(-0.24,0.28,0.36); cw2.rotation.x=Math.PI/2; g.add(cw2);
+    if(apoc){ // こわれた家：屋根がかたむき、かべに穴、クモの巣だらけ
+      roof.rotation.z=0.5; roof.position.set(0.18,0.92,0.05); roof.scale.set(0.85,0.7,0.85);
+      const hole=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.22,0.06), new THREE.MeshBasicMaterial({color:0x141414})); hole.position.set(-0.18,0.3,0.36); g.add(hole); // 壁の穴
+      const cw1=makeCobweb(); cw1.position.set(0.22,0.6,0.36); cw1.rotation.x=Math.PI/2; g.add(cw1);
+      const cw2=makeCobweb(); cw2.scale.setScalar(0.7); cw2.position.set(0.28,0.18,0.34); cw2.rotation.x=Math.PI/2; g.add(cw2);
     }
     g.userData={kind:'house', hx:x, hy:y};
     scene.add(g); houseObjs.push(g);
@@ -958,8 +1051,12 @@ function addBlock(x,y,type){
   let obj;
   if(type===1){ obj=new THREE.Group();
     const tr=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.6,0.26),M.trunk); tr.position.y=0.3;
-    const lf=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.75,0.75),M.leaf); lf.position.y=0.9;
-    obj.add(tr,lf);
+    if(gameMode==='apoc'){ // 枯れ木：はっぱなし、茶色いえだ
+      const cr=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.3,0.32),M.dead); cr.position.y=0.78;
+      const b1=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.34,0.04),M.dead); b1.position.set(0.13,0.85,0); b1.rotation.z=-0.7;
+      const b2=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.34,0.04),M.dead); b2.position.set(-0.13,0.9,0); b2.rotation.z=0.7;
+      obj.add(tr,cr,b1,b2);
+    } else { const lf=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.75,0.75),M.leaf); lf.position.y=0.9; obj.add(tr,lf); }
   } else if(type===2){ obj=new THREE.Mesh(boxGeo(),M.stone); obj.position.y=0.5; }
   else if(type===3){ obj=new THREE.Mesh(boxGeo(),M.iron); obj.position.y=0.5; }
   else if(type===4){ obj=new THREE.Mesh(new THREE.BoxGeometry(1,0.22,1),M.water); obj.position.y=0.12; }
@@ -1080,7 +1177,7 @@ let mineCd=0, currentTarget=null, promptT=0, mmTick=0;
 
 addEventListener('pointermove',e=>{ if(!dragging||e.pointerId!==dragId)return;
   yaw-=(e.clientX-lastX)*0.0032; pitch-=(e.clientY-lastY)*0.0032;
-  pitch=Math.max(-1.1,Math.min(0.5,pitch)); lastX=e.clientX; lastY=e.clientY; });
+  pitch=Math.max(-1.3,Math.min(1.45,pitch)); lastX=e.clientX; lastY=e.clientY; }); // ま上も みられる
 addEventListener('pointerup',e=>{ if(e.pointerId===dragId){ dragging=false; dragId=null; } });
 addEventListener('pointercancel',e=>{ if(e.pointerId===dragId){ dragging=false; dragId=null; } });
 
@@ -1158,6 +1255,7 @@ function sellStone(){ if(S.stone<5)return; S.stone-=5; S.coin+=1; popCenter('�
 function sellWood(){ if(S.wood<5)return; S.wood-=5; S.coin+=1; popCenter('🪙+1','#ffd34d'); render(); }
 function buyPick(){ if(S.coin<3||S.hasPick)return; S.coin-=3; S.hasPick=true; popCenter('⛏️かった！','#5ee07a'); render(); }
 function buyIron(){ if(S.coin<3)return; S.coin-=3; S.iron+=10; popCenter('⚙️鉄+10','#ffd34d'); render(); }
+function buyPudding(){ if(S.coin<2)return; S.coin-=2; popCenter('🍮 おいしい！😋','#ffd9a8'); beep(); render(); }
 function buildBody(){ if(S.iron<USE||S.body>=BODY_MAX)return; S.iron-=USE; S.body=Math.min(BODY_MAX,S.body+USE); popCenter('🛠️+'+USE,'#3bd6ff'); render(); }
 function buildFuel(){ if(S.iron<USE||S.fuel>=FUEL_MAX)return; S.iron-=USE; S.fuel=Math.min(FUEL_MAX,S.fuel+USE); popCenter('⛽+'+USE,'#ff9b4d'); render(); }
 function launch(){
@@ -1221,6 +1319,7 @@ function render(){
   $('c_torch').disabled=(S.wood<1); $('c_house').disabled=(S.stone<25);
   $('buy_pick').disabled=(S.coin<3||S.hasPick);
   { const bi=$('buy_iron'); if(bi) bi.disabled=(S.coin<3); }
+  { const bp=$('buy_pudding'); if(bp) bp.disabled=(S.coin<2); }
   $('btn_body').disabled=(S.iron<USE||S.body>=BODY_MAX);
   $('btn_fuel').disabled=(S.iron<USE||S.fuel>=FUEL_MAX);
   $('btn_launch').disabled=!(S.body>=BODY_MAX&&S.fuel>=FUEL_MAX);
@@ -1275,7 +1374,7 @@ function animate(){
     if(inside && interiorMaze) checkPyramidGoal();
     if(!inside){ if(mineCd>0)mineCd--; updateRegrow(); updateAnimals(); updateSky(dt); updateRain(dt); updateSnow(dt); updateSandstorm(dt);
       if(boat){ const tt=performance.now(); boat.position.y=boat.userData.baseY+Math.sin(tt/600)*0.05; boat.rotation.z=Math.sin(tt/800)*0.04; }
-      updateFish(); updateVillagers(); updateCamels(); updateCampfires(); updateBall(); updateHunters(); updateSkeletons();
+      updateFish(); updateVillagers(); updateCamels(); updateCampfires(); updateBall(); updateHunters(); updateSkeletons(); updateBirds(dt); updatePlanes(dt);
       if(rocketBeacons.length){ const on=Math.floor(performance.now()/500)%2===0; for(const b of rocketBeacons) b.visible=on; }
       if((mmTick++ % 5)===0) drawMinimap(); }
   }
